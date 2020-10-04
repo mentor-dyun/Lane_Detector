@@ -79,18 +79,26 @@ void mcvGetGaussianKernel(CvMat *kernel, unsigned char w, FLOAT sigma)
  {
    //input size
    CvSize inSize = cvSize(inImage->width, inImage->height);
+   printf("getIpm w: %f h: %f\n", inImage->width, inImage->height);
 
    //Get IPM
    CvSize ipmSize = cvSize((int)lanesConf->ipmWidth,
        (int)lanesConf->ipmHeight);
+
+   printf("lanesConf w: %d h: %d\n", (int)lanesConf->ipmWidth,(int)lanesConf->ipmHeight);
+
    CvMat* ipm;
    ipm = cvCreateMat(ipmSize.height, ipmSize.width, inImage->type);
+   printf("ipm w: %d h: %d\n", ipmSize.width, ipmSize.height);
    ipmInfo->vpPortion = lanesConf->ipmVpPortion;
    ipmInfo->ipmLeft = lanesConf->ipmLeft;
    ipmInfo->ipmRight = lanesConf->ipmRight;
    ipmInfo->ipmTop = lanesConf->ipmTop;
    ipmInfo->ipmBottom = lanesConf->ipmBottom;
    ipmInfo->ipmInterpolation = lanesConf->ipmInterpolation;
+
+   printf("ipm l: %d r: %d t: %d b: %d\n", ipmInfo->ipmLeft, ipmInfo->ipmRight, ipmInfo->ipmTop, ipmInfo->ipmBottom);
+
    mcvGetIpmMap(inImage, ipm, uvGrid, ipmInfo, cameraInfo, vp, outPixels, inPixels, ipm_out_of_area);
    cvReleaseMat(&ipm);
  }

@@ -5,6 +5,6 @@
 	<!-- Bring up lane detector -->
 	<node pkg="lane_detector" type="lane_detector" name="lane_detector" output="screen">
 		<param name="images_from_folder" value="$(arg load_images_from_folder)" />
-		<param name="images_path" value="$(find lane_detector)/data/second_set" />
+		<param name="images_path" value="/home/ubuntu/catkin_ws/src/lane_detector/data/second_set" />
 	</node>
 </launch>

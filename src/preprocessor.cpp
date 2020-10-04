@@ -1,6 +1,10 @@
 #include <lane_detector/preprocessor.h>
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/ocl/ocl.hpp>
+#include <opencv2/core/ocl.hpp>
+
+#include <opencv2/imgproc/imgproc.hpp>
+#include <cv.h>
+
 
 void Preprocessor::preprocess(cv::Mat& originalImg, cv::Mat& img, LaneDetector::IPMInfo& ipmInfo_, LaneDetector::CameraInfo& cameraInfo_) {
         CvMat raw_mat = img;
@@ -14,6 +18,7 @@ void Preprocessor::preprocess(cv::Mat& originalImg, cv::Mat& img, LaneDetector::
         double mean_image = means.val[0];
 
         if(initialize) {
+	  printf("preprocess initialize\n");
           initialize = false;
           getIpmMap(mat_ptr, &cameraInfo, &ipmInfo, vanishing_point, &lanesConf, &ipm_outPoints, &ipmGrid, &ipm_out_of_area, uvGrid);
           cameraInfo_ = cameraInfo;
@@ -25,9 +30,11 @@ void Preprocessor::preprocess(cv::Mat& originalImg, cv::Mat& img, LaneDetector::
         CvMat* ipm;
         ipm = cvCreateMat(config.ipmHeight, config.ipmWidth, mat_ptr->type);
         getPixelValues(mat_ptr, ipm);
+
         cvReleaseMat(&mat_ptr);
         mat_ptr = cvCloneMat(ipm);
         cvReleaseMat(&ipm);
+
         for(auto outPixelsi = ipm_outPoints.begin(); outPixelsi != ipm_outPoints.end(); outPixelsi++)
         {
           CV_MAT_ELEM(*mat_ptr, float, (*outPixelsi).y, (*outPixelsi).x) = (float)mean_image;
@@ -45,41 +52,59 @@ void Preprocessor::preprocess(cv::Mat& originalImg, cv::Mat& img, LaneDetector::
           cvReleaseMat(&fx);
           cvReleaseMat(&fy);
         }
+
         //do the filtering
         if(config.use_gpu) {
           //subtract mean of the image
           img = cv::cvarrToMat(mat_ptr, true);
-          cv::ocl::oclMat ocl_img(img);
-          cv::ocl::subtract(ocl_img, cv::Scalar(mean_image), ocl_img);
-          cv::ocl::sepFilter2D(ocl_img, ocl_img, CV_32FC1, kernel_x, kernel_y);
-          //cv::ocl::abs(ocl_img, ocl_img);
-          img = ocl_img;
+          //cv::ocl::oclMat ocl_img(img);
+          cv::UMat ocl_img = img.getUMat(cv::ACCESS_RW);
+
+          //cv::ocl::subtract(ocl_img, cv::Scalar(mean_image), ocl_img);
+	  subtract(ocl_img, cv::Scalar(mean_image), ocl_img);
+
+          //cv::ocl::sepFilter2D(ocl_img, ocl_img, CV_32FC1, kernel_x, kernel_y);
+	  sepFilter2D(ocl_img, ocl_img, CV_32FC1, kernel_x, kernel_y);
+
+          //img = ocl_img;
+	  img = ocl_img.getMat(cv::ACCESS_RW);
         }
         else {
           //subtract mean of the image
           CvScalar mean;
           mean.val[0] = mean_image;
           cvSubS(mat_ptr, mean, mat_ptr);
-          img = cv::cvarrToMat(mat_ptr, true);
+
+          img = cv::cvarrToMat(mat_ptr, false);
+
           cv::sepFilter2D(img, img, CV_32FC1, kernel_x, kernel_y);
         }
-        cvReleaseMat(&mat_ptr);
+
+	// This was causing frames to be blank!
+//        cvReleaseMat(&mat_ptr);
         raw_mat = img;
         mat_ptr = &raw_mat;
         //if(!config.use_gpu) cvAbsDiffS(mat_ptr, mat_ptr, CvScalar{0.0});
+
 
         //zero out points outside the image in IPM view
         for(auto outPixelsi = ipm_out_of_area.begin(); outPixelsi != ipm_out_of_area.end(); outPixelsi++)
         {
           CV_MAT_ELEM(*mat_ptr, float, (*outPixelsi).y, (*outPixelsi).x) = 0.0;
         }
+/*
+	cv::Mat dave = cv::cvarrToMat(mat_ptr, true);
+        cv::imshow("Process", img);
+        cv::waitKey(10);
+*/	
         //LaneDetector::SHOW_IMAGE(mat_ptr, "IMG", 10);
         //compute quantile: .985
         float qtileThreshold = LaneDetector::mcvGetQuantile(mat_ptr, lanesConf.lowerQuantile);
+
         LaneDetector::mcvThresholdLower(mat_ptr, mat_ptr, qtileThreshold);
         ROS_DEBUG("xScale: %f, yScale: %f, ymaxLim: %f",ipmInfo.xScale, ipmInfo.yScale, ipmInfo.yLimits[1]);
+
         img = cv::cvarrToMat(mat_ptr, true);
-        //cvReleaseMat(&mat_ptr);
 
         if(config.draw_roi) {
 

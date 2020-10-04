@@ -8,7 +8,7 @@
 #define FITTINGAPPROACH_H_
 
 #include <ros/ros.h>
-#include <cv.h>
+#include <opencv/cv.h>
 
 class FittingApproach {
 public:

@@ -10,11 +10,17 @@
 #include <lane_detector/LaneDetector.hh>
 #include <lane_detector/DetectorConfig.h>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 #include <geometry_msgs/Point32.h>
 #include <vector>
 #include <stdexcept>
 #include <algorithm>
 #include <lane_detector/splineCombination.h>
+
+#include <geometry_msgs/Quaternion.h>
+
+#define PI 3.141592654
+#define DEG(rad) (rad*180./PI)
 
 namespace lane_detector{
 
@@ -23,6 +29,37 @@ namespace lane_detector{
     on_the_left = 1,
     on_the_right = 0
   };
+
+  // src/map_testing/include/map_testing/util.h
+  struct point {
+    long double lat;
+    long double lon;
+    point(double lat_, double lon_) {
+        lat=lat_;
+        lon=lon_;
+    }
+    point() {}
+  };
+  //void toEulerAngle(const geometry_msgs::Quaternion &q, double &yaw, double &pitch, double &roll);
+  // Helper functions for ford_here_map_lane_commands_node
+
+  void toEulerAngle(const geometry_msgs::Quaternion &q, double &yaw, double &pitch, double &roll) {
+    // roll (x-axis rotation)
+    double sinr = +2.0 * (q.w * q.x + q.y * q.z);
+    double cosr = +1.0 - 2.0 * (q.x * q.x + q.y * q.y);
+    roll = atan2(sinr, cosr);
+
+    // pitch (y-axis rotation)
+    double sinp = +2.0 * (q.w * q.y - q.z * q.x);
+    if (fabs(sinp) >= 1) pitch = copysign(M_PI / 2, sinp); // use 90 degrees if out of range
+    else pitch = asin(sinp);
+
+    // yaw (z-axis rotation)
+    double siny = +2.0 * (q.w * q.z + q.x * q.y);
+    double cosy = +1.0 - 2.0 * (q.y * q.y + q.z * q.z);
+    yaw = atan2(siny, cosy);
+  }
+
 
     namespace utils {
 
@@ -338,18 +375,46 @@ namespace lane_detector{
     // ROS conventions are being used
     geometry_msgs::Point32 cvtCvPointToROSPoint(const cv::Point2f& point) {
         geometry_msgs::Point32 point32;
+	/*
         point32.x = point.y;
         point32.y = -point.x;
+        point32.z = 0;
+	*/
+	point32.x = point.x;
+	point32.y = point.y;
+	point32.z = 0;
+
+        return point32;
+    }
+
+    geometry_msgs::Point32 cvtCvPointToROSPoint2(const cv::Point& point) {
+        geometry_msgs::Point32 point32;
+        /*
+        point32.x = point.y;
+        point32.y = -point.x;
+        point32.z = 0;
+        */
+        point32.x = point.x;
+        point32.y = point.y;
         point32.z = 0;
 
         return point32;
     }
+
 
     //Converts a vector of CV-points (cv::Point2f) in ROS-points (geometry_msgs::Point32)
     inline void cvtCvPoints2ROSPoints(const std::vector<cv::Point2f>& input, std::vector<geometry_msgs::Point32>& output) {
       output.clear();
       for(cv::Point2f p : input) {
         geometry_msgs::Point32 p_ros = cvtCvPointToROSPoint(p);
+        output.push_back(p_ros);
+      }
+    }
+
+    inline void cvtCvPointsROSPoints(const std::vector<cv::Point>& input, std::vector<geometry_msgs::Point32>& output) {
+      output.clear();
+      for(cv::Point p : input) {
+        geometry_msgs::Point32 p_ros = cvtCvPointToROSPoint2(p);
         output.push_back(p_ros);
       }
     }

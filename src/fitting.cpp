@@ -34,7 +34,6 @@ lane_detector::Lane Fitting::fitting(cv::Mat& original, cv::Mat& processed_bgr, 
         std::vector< std::vector<cv::Point> > splines(rects.size());
         ROS_DEBUG("Lanes detected: %lu", rects.size());
 
-
         if(rects.size() > 0) {
           omp_set_num_threads(config.number_of_threads);
           #pragma omp parallel shared(splines)
@@ -139,46 +138,81 @@ lane_detector::Lane Fitting::fitting(cv::Mat& original, cv::Mat& processed_bgr, 
            lane_detector::utils::ipmPoints2World(right_spline_float, right_spline_float, ipmInfo);
            lane_detector::utils::ipmPoints2World(left_spline_float, left_spline_float, ipmInfo);
 
+	   std::vector<geometry_msgs::Point32> left_float_ros;
+           std::vector<geometry_msgs::Point32> right_float_ros;
+           std::vector<geometry_msgs::Point32> guide_float_ros;
+
            std::vector<geometry_msgs::Point32> left_spline_ros;
            std::vector<geometry_msgs::Point32> right_spline_ros;
            std::vector<geometry_msgs::Point32> guide_spline_ros;
 
-           //Convert Cv-Points to ROS-points (geometry_msgs::Point32)
-           lane_detector::utils::cvtCvPoints2ROSPoints(guide_spline_float, guide_spline_ros);
-           lane_detector::utils::cvtCvPoints2ROSPoints(right_spline_float, right_spline_ros);
-           lane_detector::utils::cvtCvPoints2ROSPoints(left_spline_float, left_spline_ros);
+           // Convert Cv-Points to ROS-points (geometry_msgs::Point32)
+           lane_detector::utils::cvtCvPoints2ROSPoints(guide_spline_float, guide_float_ros);
+           lane_detector::utils::cvtCvPoints2ROSPoints(right_spline_float, right_float_ros);
+           lane_detector::utils::cvtCvPoints2ROSPoints(left_spline_float, left_float_ros);
 
-           current_lane_msg.guide_line = guide_spline_ros;
-           current_lane_msg.right_line = right_spline_ros;
-           current_lane_msg.left_line = left_spline_ros;
+           current_lane_msg.guide_line_float = guide_float_ros;
+           current_lane_msg.right_line_float = right_float_ros;
+           current_lane_msg.left_line_float  = left_float_ros;
 
            if(config.transform_back) {
 
              cv::Mat left_spline_mat(2, left_spline_float.size(), CV_32FC1);
-             cv::Mat right_spline_mat(2, right_spline_float.size(), CV_32FC1);
+             cv::Mat guide_spline_mat(2, guide_spline_float.size(), CV_32FC1);
+	     cv::Mat right_spline_mat(2, right_spline_float.size(), CV_32FC1);
+
              lane_detector::utils::spline2Mat(left_spline_float, left_spline_mat);
+             lane_detector::utils::spline2Mat(guide_spline_float, guide_spline_mat);
              lane_detector::utils::spline2Mat(right_spline_float, right_spline_mat);
+
              left_spline_mat = left_spline_mat * 1000.0; //convert to mm
-             right_spline_mat = right_spline_mat * 1000.0; //convert to mm
+             guide_spline_mat = guide_spline_mat * 1000.0; //convert to mm
+	     right_spline_mat = right_spline_mat * 1000.0; //convert to mm
+
              CvMat left_spline_mat_ = left_spline_mat;
-             CvMat right_spline_mat_ = right_spline_mat;
+             CvMat guide_spline_mat_ = guide_spline_mat;
+	     CvMat right_spline_mat_ = right_spline_mat;
+
              LaneDetector::mcvTransformGround2Image(&left_spline_mat_, &left_spline_mat_, &cameraInfo);
-             LaneDetector::mcvTransformGround2Image(&right_spline_mat_, &right_spline_mat_, &cameraInfo);
+             LaneDetector::mcvTransformGround2Image(&guide_spline_mat_, &guide_spline_mat_, &cameraInfo);
+	     LaneDetector::mcvTransformGround2Image(&right_spline_mat_, &right_spline_mat_, &cameraInfo);
+
              left_spline_mat = cv::cvarrToMat(&left_spline_mat_, false);
-             right_spline_mat = cv::cvarrToMat(&right_spline_mat_, false);
+             guide_spline_mat = cv::cvarrToMat(&guide_spline_mat_, false);
+	     right_spline_mat = cv::cvarrToMat(&right_spline_mat_, false);
+
              lane_detector::utils::mat2Spline(left_spline_mat, left_spline_float);
-             lane_detector::utils::mat2Spline(right_spline_mat, right_spline_float);
+             lane_detector::utils::mat2Spline(guide_spline_mat, guide_spline_float);
+	     lane_detector::utils::mat2Spline(right_spline_mat, right_spline_float);
+
              left_spline = lane_detector::utils::cvtCvPoint2f2CvPoint(left_spline_float);
-             right_spline = lane_detector::utils::cvtCvPoint2f2CvPoint(right_spline_float);
+             guide_spline = lane_detector::utils::cvtCvPoint2f2CvPoint(guide_spline_float);
+	     right_spline = lane_detector::utils::cvtCvPoint2f2CvPoint(right_spline_float);
+
              if(config.draw_splines) {
-             lane_detector::utils::drawSpline(original, left_spline, 6, cv::Scalar(0,255,0));
-             lane_detector::utils::drawSpline(original, right_spline, 6, cv::Scalar(0,255,0));
-            }
-            left_spline = lane_detector::utils::splineSampling(left_spline);
-            right_spline = lane_detector::utils::splineSampling(right_spline);
-            splines.clear();
-            splines.push_back(left_spline);
-            splines.push_back(right_spline);
+               lane_detector::utils::drawSpline(original, left_spline, 6, cv::Scalar(0,255,0));
+	       // Disable drawing center yellow spline
+	       //lane_detector::utils::drawSpline(original, guide_spline, 6, cv::Scalar(0,255,255));
+               lane_detector::utils::drawSpline(original, right_spline, 6, cv::Scalar(0,255,0));
+             }
+             left_spline = lane_detector::utils::splineSampling(left_spline);
+             guide_spline = lane_detector::utils::splineSampling(guide_spline);
+	     right_spline = lane_detector::utils::splineSampling(right_spline);
+
+             splines.clear();
+             splines.push_back(left_spline);
+             splines.push_back(guide_spline);
+	     splines.push_back(right_spline);
+
+	     // Push spline to ros
+             // Convert Cv-Points to ROS-points (geometry_msgs::Point32) in degrees
+             lane_detector::utils::cvtCvPointsROSPoints(right_spline, right_spline_ros);
+             lane_detector::utils::cvtCvPointsROSPoints(guide_spline, guide_spline_ros);
+	     lane_detector::utils::cvtCvPointsROSPoints(left_spline, left_spline_ros);
+
+             current_lane_msg.right_line = right_spline_ros;
+             current_lane_msg.guide_line = guide_spline_ros;
+	     current_lane_msg.left_line = left_spline_ros;
         }
       }
       else{

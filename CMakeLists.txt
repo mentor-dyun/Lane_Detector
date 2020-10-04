@@ -14,7 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   dynamic_reconfigure
   message_generation
 )
-find_package(OpenCV 2 REQUIRED)
+find_package(OpenCV 3 REQUIRED)
 find_package(OpenMP REQUIRED)
 find_package(MRPT REQUIRED)
 
@@ -201,7 +201,7 @@ target_link_libraries(lane_detector ${OpenCV_LIBRARIES} LaneDetector)
 # )
 
 #Disabling deprecating warnings
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-write-strings -fpermissive ")
 #set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wno-deprecated")
 
 find_package(OpenMP)
