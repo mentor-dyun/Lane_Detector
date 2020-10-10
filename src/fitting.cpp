@@ -138,7 +138,7 @@ lane_detector::Lane Fitting::fitting(cv::Mat& original, cv::Mat& processed_bgr, 
            lane_detector::utils::ipmPoints2World(right_spline_float, right_spline_float, ipmInfo);
            lane_detector::utils::ipmPoints2World(left_spline_float, left_spline_float, ipmInfo);
 
-	   std::vector<geometry_msgs::Point32> left_float_ros;
+		   std::vector<geometry_msgs::Point32> left_float_ros;
            std::vector<geometry_msgs::Point32> right_float_ros;
            std::vector<geometry_msgs::Point32> guide_float_ros;
 

@@ -48,13 +48,36 @@ lane_detector::point localizer_position;
 double localizer_yaw, localizer_pitch, localizer_roll;
 rosgraph_msgs::Clock simTime;
 
+// RC-Car Steering control
+// servo: 1 - Throttle
+// servo: 2 - Steering (center: 333.0, range: 90
+//
+// Steering degree center = 3333.0
+//
+// Cap steering angle within 90 degree range
+int servo_steering_range(int steering)
+{
+    // Pad the steering degree so we don't go
+    // past the range of +-90
+    if (steering > 0) {
+        if (steering > 90) steering = 90;
+    }
+    else if (steering < 0) {
+        if (steering < -90) steering = -90;
+    }
+
+    return steering;
+}
+
 /**
  * readCameraInfo reads and sets the camera parameters if received on topic "camera_info".
  * Otherwise the parameters are set with some constant values related to the camera used
  * in our experiments.
  */
-void readCameraInfo(const sensor_msgs::CameraInfo::ConstPtr& cm, bool* done) {
-/*
+void readCameraInfo(const sensor_msgs::CameraInfo::ConstPtr& cm, bool* done) 
+{
+  printf("Inside readCameraInfo\n");
+
   if(cm != NULL) {
     cameraInfo.focalLength.x = cm->P[0];
     cameraInfo.focalLength.y = cm->P[5];
@@ -71,37 +94,13 @@ void readCameraInfo(const sensor_msgs::CameraInfo::ConstPtr& cm, bool* done) {
     cameraInfo.focalLength.y = 300.836426;
     cameraInfo.opticalCenter.x = 325.678818;
     cameraInfo.opticalCenter.y = 250.211312;
+
     cameraInfo.imageWidth = 640;
     cameraInfo.imageHeight = 480;
     cameraInfo.cameraHeight = dynConfig.camera_height;
-    cameraInfo.pitch = dynConfig.camera_pitch * CV_PI/180;
+    cameraInfo.pitch = 0.7; //dynConfig.camera_pitch * CV_PI/180;
     cameraInfo.yaw = 0.0;
   }
-*/
-
-  cameraInfo.focalLength.x = 270.076996;
-  cameraInfo.focalLength.y = 300.836426;
-  cameraInfo.opticalCenter.x = 325.678818;
-  cameraInfo.opticalCenter.y = 250.211312;
-
-  cameraInfo.imageWidth = 640;
-  cameraInfo.imageHeight = 480;
-  cameraInfo.cameraHeight = dynConfig.camera_height;
-  cameraInfo.pitch = 0.7; //dynConfig.camera_pitch * CV_PI/180;
-  cameraInfo.yaw = 0.0;
-
-  /*
-  cameraInfo.focalLength.x = 707.0912; // 7.5mm
-  cameraInfo.focalLength.y = 707.0912; // 7.5mm
-  cameraInfo.opticalCenter.x = 601.8873; //1.6890;
-  cameraInfo.opticalCenter.y = 183.1104; //0.400;
-
-  cameraInfo.imageWidth = 640;
-  cameraInfo.imageHeight = 480;
-  cameraInfo.cameraHeight = dynConfig.camera_height;
-  cameraInfo.pitch = 0.6; //dynConfig.camera_pitch * CV_PI/180;
-  cameraInfo.yaw = 0.0;
-  */
 
   *done = true;
 }
@@ -109,45 +108,44 @@ void readCameraInfo(const sensor_msgs::CameraInfo::ConstPtr& cm, bool* done) {
 //Callback function for Dynamic Reconfigre
 void configCallback(lane_detector::DetectorConfig& config, uint32_t level)
 {
-        preproc.setConfig(config);
-        extractor.setConfig(config);
-        fitting_phase.setConfig(config);
-        dynConfig = config;
-        ROS_DEBUG("Config was set");
+    preproc.setConfig(config);
+    extractor.setConfig(config);
+    fitting_phase.setConfig(config);
+    dynConfig = config;
+    ROS_DEBUG("Config was set");
 }
 
 //Callback function for topic "lane_detector/driving_orientation"
 void drivingOrientationCB(const std_msgs::Int32::ConstPtr& driving_orientation)
 {
-  if(driving_orientation->data == 0)
-      fitting_phase.setDrivingOrientation(lane_detector::on_the_right);
-  else if(driving_orientation->data == 1)
-      fitting_phase.setDrivingOrientation(lane_detector::on_the_left);
+    if(driving_orientation->data == 0)
+        fitting_phase.setDrivingOrientation(lane_detector::on_the_right);
+    else if(driving_orientation->data == 1)
+        fitting_phase.setDrivingOrientation(lane_detector::on_the_left);
 }
 
 //Callback function for topic "/gnss_pose"
 void poseCB(const geometry_msgs::PoseStamped msg) 
 {
-  /*
-  printf( "--- @%f sec\n", simTime.clock.toSec() );
-  printf("  Pos X = %f m, Pos Y = %f m, Pos Z = %f m\n", receive_buffer[POS_X_IDX], receive_buffer[POS_Y_IDX], receive_buffer[POS_Z_IDX]);
-  printf("  Roll = %f deg, Pitch = %f deg, Yaw = %f deg\n", receive_buffer[ROLL_IDX], receive_buffer[PITCH_IDX], receive_buffer[YAW_IDX]);
-  */
+    /*
+    printf( "--- @%f sec\n", simTime.clock.toSec() );
+    printf("  Pos X = %f m, Pos Y = %f m, Pos Z = %f m\n", receive_buffer[POS_X_IDX], receive_buffer[POS_Y_IDX], receive_buffer[POS_Z_IDX]);
+    printf("  Roll = %f deg, Pitch = %f deg, Yaw = %f deg\n", receive_buffer[ROLL_IDX], receive_buffer[PITCH_IDX], receive_buffer[YAW_IDX]);
+    */
 
-  // Save current position information
-  gnss_pose.pose.position.x = msg.pose.position.x;
-  gnss_pose.pose.position.y = msg.pose.position.y;
-  gnss_pose.pose.position.z = msg.pose.position.z;
-  gnss_pose.pose.orientation = msg.pose.orientation;
+    // Save current position information
+    gnss_pose.pose.position.x = msg.pose.position.x;
+    gnss_pose.pose.position.y = msg.pose.position.y;
+    gnss_pose.pose.position.z = msg.pose.position.z;
+    gnss_pose.pose.orientation = msg.pose.orientation;
 
-  localizer_position = lane_detector::point(gnss_pose.pose.position.y, gnss_pose.pose.position.x);
-  lane_detector::toEulerAngle(gnss_pose.pose.orientation, localizer_yaw, localizer_pitch, localizer_roll);
-
+    localizer_position = lane_detector::point(gnss_pose.pose.position.y, gnss_pose.pose.position.x);
+    lane_detector::toEulerAngle(gnss_pose.pose.orientation, localizer_yaw, localizer_pitch, localizer_roll);
 }
 
 void clockCB(const rosgraph_msgs::Clock clock) 
 {
-  simTime = clock;
+    simTime = clock;
 }
 
 void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetectorConf& lanesConf) 
@@ -173,7 +171,9 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
 
     extractor.extract(processed_bgr, preprocessed, boxes);
     lane_detector::Lane current_lane = fitting_phase.fitting(currentFrame_ptr->image, processed_bgr, preprocessed, ipmInfo, cameraInfo, boxes);
-    lane_pub.publish(current_lane);
+	current_lane.steering_angle = 0;
+
+    //lane_pub.publish(current_lane);
 
     cv::Mat img = currentFrame_ptr->image;
 
@@ -181,36 +181,39 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
     // Same logic used in he simulink_gateway
     if (current_lane.guide_line.size() > 0)
     {
-        int center = img.cols/2;
-        int steering_angle_degrees = center - current_lane.guide_line[3].x;
-	double alpha = 0.5;
-	int baseline = 0;
+		// Cap steering angle within 90 degree range
+		int center = img.cols/2;
+		int steering_angle_degrees = center - current_lane.guide_line[3].x;
+    	steering_angle_degrees = servo_steering_range(steering_angle_degrees);
 
-	// Draw transparent rectangle fill that will be the background border for the display
-	// Top 
+		double alpha = 0.5;
+        int baseline = 0;
+
+		// Draw transparent rectangle fill that will be the background border for the display
+		// Top 
         cv::Mat roi_top = img(cv::Rect(2, 2, 640-4, 52));
         cv::Mat color_top(roi_top.size(), CV_8UC3, CV_RGB(0,0,0));
         cv::addWeighted(color_top, alpha, roi_top, 1.0 - alpha, 0.0, roi_top);
 
-	// Bottom
+		// Bottom
         alpha = 0.3;
         cv::Mat roi_bottom = img(cv::Rect(4, 394, 634, 82));
-	cv::Mat color_bottom(roi_bottom.size(), CV_8UC3, CV_RGB(0,0,0));
+		cv::Mat color_bottom(roi_bottom.size(), CV_8UC3, CV_RGB(0,0,0));
         cv::addWeighted(color_bottom, alpha, roi_bottom, 1.0 - alpha, 0.0, roi_bottom);	
 
-	// Test
-	// Draw arrow line
-	int thickness = 1;
-	int line_type = CV_AA; // anti-aliased
-	int shift = 0;
-	double tipLength = 0.05;
-	char text_pose[200];
+		// Test
+		// Draw arrow line
+		int thickness = 1;
+		int line_type = CV_AA; // anti-aliased
+		int shift = 0;
+		double tipLength = 0.05;
+		char text_pose[200];
 
-	// Draw 3-axis
-	// x-axis (roll)
-	/*
-	cv::arrowedLine(img, cv::Point(10,100), cv::Point(90,60), CV_RGB(255,0,0), thickness, line_type, shift, tipLength);
-	cv::putText(img,                                // image
+		// Draw 3-axis
+		// x-axis (roll)
+		/*
+		cv::arrowedLine(img, cv::Point(10,100), cv::Point(90,60), CV_RGB(255,0,0), thickness, line_type, shift, tipLength);
+		cv::putText(img,                                // image
                     "Vehicle Position",                          // text
                     cv::Point(10, 15),                  // top-left position
                     cv::FONT_HERSHEY_DUPLEX,            // font
@@ -219,37 +222,37 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
                     1);                                 // font thickness
 
         // y-axis (pitch)
-	cv::arrowedLine(img, cv::Point(10,100), cv::Point(80,160), CV_RGB(255,0,0), thickness, line_type, shift, tipLength);
+		cv::arrowedLine(img, cv::Point(10,100), cv::Point(80,160), CV_RGB(255,0,0), thickness, line_type, shift, tipLength);
        
         // z-axis (pitch)
         cv::arrowedLine(img, cv::Point(10,100), cv::Point(10,20), CV_RGB(255,0,0), thickness, line_type, shift, tipLength);
-	*/
+		*/
 
 	
-	// Draw text - vehicle position
-	/*
-  	printf( "--- @%f sec\n", simTime.clock.toSec() );
-  	printf("  Pos X = %f m, Pos Y = %f m, Pos Z = %f m\n", receive_buffer[POS_X_IDX], receive_buffer[POS_Y_IDX], receive_buffer[POS_Z_IDX]);
-  	printf("  Roll = %f deg, Pitch = %f deg, Yaw = %f deg\n", receive_buffer[ROLL_IDX], receive_buffer[PITCH_IDX], receive_buffer[YAW_IDX]);
-  	*/
+		// Draw text - vehicle position
+		/*
+  		printf( "--- @%f sec\n", simTime.clock.toSec() );
+  		printf("  Pos X = %f m, Pos Y = %f m, Pos Z = %f m\n", receive_buffer[POS_X_IDX], receive_buffer[POS_Y_IDX], receive_buffer[POS_Z_IDX]);
+  		printf("  Roll = %f deg, Pitch = %f deg, Yaw = %f deg\n", receive_buffer[ROLL_IDX], receive_buffer[PITCH_IDX], receive_buffer[YAW_IDX]);
+  		*/
 
-	// Clock right-align text to the right side
-	sprintf(text_pose, "@%f sec", simTime.clock.toSec() );
-	cv::Size textSize = getTextSize(text_pose, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &baseline);
+		// Clock right-align text to the right side
+		sprintf(text_pose, "@%f sec", simTime.clock.toSec() );
+		cv::Size textSize = getTextSize(text_pose, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &baseline);
         cv::putText(img, text_pose, cv::Point(640-10-textSize.width,15), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
 
-	// Pos X
+		// Pos X
         sprintf(text_pose, "Pos X = %f m", gnss_pose.pose.position.x);
-	cv::putText(img, text_pose, cv::Point(10,15), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
-	// Pos Y
-	sprintf(text_pose, "Pos Y = %f m", gnss_pose.pose.position.y);
+		cv::putText(img, text_pose, cv::Point(10,15), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
+		// Pos Y
+		sprintf(text_pose, "Pos Y = %f m", gnss_pose.pose.position.y);
         cv::putText(img, text_pose, cv::Point(10,30), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
-	// Pos Z
-	sprintf(text_pose, "Pos Z = %f m", gnss_pose.pose.position.z);
+		// Pos Z
+		sprintf(text_pose, "Pos Z = %f m", gnss_pose.pose.position.z);
         cv::putText(img, text_pose, cv::Point(10,45), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
 
 
-	// Roll
+		// Roll
         sprintf(text_pose, "Roll  = %f deg", DEG(localizer_pitch));
         cv::putText(img, text_pose, cv::Point(240,15), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
         // Pitch
@@ -260,13 +263,13 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
         cv::putText(img, text_pose, cv::Point(240,45), cv::FONT_HERSHEY_SIMPLEX, 0.4, CV_RGB(255,255,255), 1);
 
 
-	// The roll and pitch is swapped, trying to match what simulink_gateway is outputing
+		// The roll and pitch is swapped, trying to match what simulink_gateway is outputing
         //sprintf(text_pose, "Roll = %f deg, Pitch = %f deg, Yaw = %f deg", DEG(localizer_pitch), DEG(localizer_roll), DEG(localizer_yaw));
 
-	// Draw text - Steering Angle and degree
-	char text[200];
-	sprintf(text, "Steering Angle: %d", steering_angle_degrees);
-	cv::putText(img, 				// image
+		// Draw text - Steering Angle and degree
+		char text[200];
+		sprintf(text, "Steering Angle: %d", steering_angle_degrees);
+		cv::putText(img, 				// image
 		    text, 				// text
 		    cv::Point(center - 120, 420), 	// top-left position
 		    cv::FONT_HERSHEY_DUPLEX,		// font
@@ -275,20 +278,26 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
 		    2);					// font thickness
 
         // Draw white cross hair (long horizontal line and short vertical)
-	// Draw vertical line
-	cv::Point p3(center,440), p4(center,470);
-	int thicknessLine = 2;
-	cv::line(img, p3, p4, CV_RGB(255,255,255), thicknessLine);
+		// Draw vertical line
+		cv::Point p3(center,440), p4(center,470);
+		int thicknessLine = 2;
+		cv::line(img, p3, p4, CV_RGB(255,255,255), thicknessLine);
 
-	// Draw horizontal line
-	cv::Point p5(center-150,455), p6(center+150,455);
+		// Draw horizontal line
+		cv::Point p5(center-150,455), p6(center+150,455);
         cv::line(img, p5, p6, CV_RGB(255,255,255), thicknessLine);
 
-	// Draw current vertical line status (steering angle)
-	int offset = center - steering_angle_degrees;
-	cv::Point p7(offset,440), p8(offset,470);
+		// Draw current vertical line status (steering angle)
+		int offset = center - steering_angle_degrees;
+		cv::Point p7(offset,440), p8(offset,470);
         cv::line(img, p7, p8, CV_RGB(255,255,0), thicknessLine+1);
+
+		// Save steering angle to publish
+		current_lane.steering_angle = steering_angle_degrees;
     }
+
+	// Publish current_lane
+	lane_pub.publish(current_lane);
 
     cv::imshow("Orig", currentFrame_ptr->image);
     //cv::imshow("Out", processed_bgr);
@@ -297,20 +306,19 @@ void processImage(LaneDetector::CameraInfo& cameraInfo, LaneDetector::LaneDetect
 }
 
 //Callback function for a new image on topic "image".
-void readImg(const sensor_msgs::ImageConstPtr& img) {
-
-        try
-        {
-                currentFrame_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
-                processImage(cameraInfo, lanesConf);
-                resultImg_pub.publish(*currentFrame_ptr->toImageMsg());
-        }
-        catch (cv_bridge::Exception& e)
-        {
-                ROS_ERROR("cv_bridge exception: %s", e.what());
-                return;
-        }
-
+void readImg(const sensor_msgs::ImageConstPtr& img) 
+{
+    try
+    {
+        currentFrame_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
+        processImage(cameraInfo, lanesConf);
+        resultImg_pub.publish(*currentFrame_ptr->toImageMsg());
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
 }
 
 void laneDetectionFromFiles(std::string& path) {
@@ -401,20 +409,24 @@ int main(int argc, char **argv){
 	// Since we don't have a HW camera, we will comment out the subscriber to the camera and
 	// read the hardcoded camera parameters for Prescan
 	//
-        //ros::Subscriber cameraInfo_sub = nh.subscribe<sensor_msgs::CameraInfo>("camera_info", 1, std::bind(readCameraInfo, std::placeholders::_1, &info_set));
-        //if(loadFiles) readCameraInfo(NULL,&info_set);
-	readCameraInfo(NULL,&info_set);
+	printf("lane follower: before loadFiles\n");
+	ros::Subscriber cameraInfo_sub = nh.subscribe<sensor_msgs::CameraInfo>("camera_info", 1, std::bind(readCameraInfo, std::placeholders::_1, &info_set));
+	if (loadFiles) readCameraInfo(NULL,&info_set);
 
         while (!info_set) {
           ros::spinOnce();
-          ROS_WARN("No information on topic camera_info received");
+          //ROS_WARN("No information on topic camera_info received");
         }
+	printf("lane follower: info_set\n");
 
         //Stop the Subscriber
-        //cameraInfo_sub.shutdown();
+        cameraInfo_sub.shutdown();
 
         //Set cameraInfo
         preproc.setCameraInfo(cameraInfo);
+
+	printf("after preproc.setCameraInfo\n");
+	fflush(stdout);
 
         /**
          * The advertise() function is how you tell ROS that you want to
